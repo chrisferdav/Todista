@@ -1,0 +1,31 @@
+# Variables de entorno
+config.env
+.env
+.env.local
+.env.production
+
+# Archivos temporales
+*.tmp
+*.temp
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de audio temporales (por si acaso)
+*.ogg
+*.wav
+*.mp3 
