@@ -1,5 +1,5 @@
 services:
-  - type: web
+  - type: background
     name: todista-bot
     env: python
     plan: free
