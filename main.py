@@ -10,6 +10,7 @@ import openai
 import google.generativeai as genai
 from todoist_api_python.api import TodoistAPI
 from dotenv import load_dotenv
+import re
 
 # Cargar variables de entorno
 load_dotenv('config.env')
@@ -37,6 +38,56 @@ def get_current_date():
 def get_current_date_iso():
     """Obtiene la fecha actual en formato ISO para Todoist en UTM-5"""
     return datetime.now(TIMEZONE).strftime('%Y-%m-%d')
+
+def parse_natural_date(date_str: str, now=None):
+    """Convierte expresiones como 'miércoles', 'jueves', 'mañana', 'hoy', etc. en una fecha YYYY-MM-DD cercana."""
+    if now is None:
+        now = datetime.now(TIMEZONE)
+    date_str = date_str.strip().lower()
+    days_map = {
+        'lunes': 0, 'martes': 1, 'miércoles': 2, 'miercoles': 2, 'jueves': 3, 'viernes': 4, 'sábado': 5, 'sabado': 5, 'domingo': 6
+    }
+    if date_str in ['hoy', 'today']:
+        return now.strftime('%Y-%m-%d')
+    if date_str in ['mañana', 'tomorrow']:
+        return (now + timedelta(days=1)).strftime('%Y-%m-%d')
+    if date_str in ['pasado mañana', 'pasado manana', 'overmorrow']:
+        return (now + timedelta(days=2)).strftime('%Y-%m-%d')
+    if date_str in ['próxima semana', 'proxima semana', 'next week']:
+        return (now + timedelta(days=7)).strftime('%Y-%m-%d')
+    # Día de la semana
+    if date_str in days_map:
+        today_idx = now.weekday()
+        target_idx = days_map[date_str]
+        days_ahead = (target_idx - today_idx) % 7
+        if days_ahead == 0:
+            # Si es hoy pero ya pasó la hora laboral, ir a la próxima semana
+            if now.hour >= 18:
+                days_ahead = 7
+        return (now + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
+    # Formatos explícitos
+    for fmt in ['%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d', '%d/%m/%y']:
+        try:
+            parsed_date = datetime.strptime(date_str, fmt)
+            return parsed_date.strftime('%Y-%m-%d')
+        except:
+            continue
+    # Buscar fechas tipo 'jueves 11 de julio'
+    match = re.match(r'(lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo) (\d{1,2}) de (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)', date_str)
+    if match:
+        day_name, day_num, month_name = match.groups()
+        months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+        month_idx = months.index(month_name) + 1
+        year = now.year
+        # Si la fecha ya pasó este año, usar el siguiente
+        try:
+            candidate = datetime(year, month_idx, int(day_num), tzinfo=TIMEZONE)
+            if candidate < now:
+                candidate = datetime(year+1, month_idx, int(day_num), tzinfo=TIMEZONE)
+            return candidate.strftime('%Y-%m-%d')
+        except:
+            pass
+    return None
 
 # Verificar que todas las variables estén configuradas
 if not all([TELEGRAM_TOKEN, OPENAI_API_KEY, GEMINI_API_KEY]):
@@ -415,23 +466,11 @@ async def create_todoist_task(task_data: dict) -> dict:
         due_date = None
         due_string = task_data.get('due_date', '')
         if due_string and isinstance(due_string, str):
-            if due_string.lower() == 'mañana':
-                due_date = (datetime.now(TIMEZONE) + timedelta(days=1)).strftime('%Y-%m-%d')
-            elif due_string.lower() == 'hoy':
-                due_date = get_current_date_iso()
-            elif due_string.lower() == 'próxima semana':
-                due_date = (datetime.now(TIMEZONE) + timedelta(days=7)).strftime('%Y-%m-%d')
+            parsed = parse_natural_date(due_string)
+            if parsed:
+                due_date = parsed
             else:
-                # Intentar parsear fecha específica en formato dd-mm-yyyy
-                try:
-                    parsed_date = datetime.strptime(due_string, '%d-%m-%Y')
-                    due_date = parsed_date.strftime('%Y-%m-%d')
-                except:
-                    # Intentar otros formatos como respaldo
-                    try:
-                        due_date = datetime.strptime(due_string, '%Y-%m-%d').strftime('%Y-%m-%d')
-                    except:
-                        due_date = None
+                due_date = None
         
         # Procesar prioridad
         priority_map = {
@@ -765,7 +804,7 @@ async def cancel_all_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE, u
     
     await query.edit_message_text(
         "❌ <b>Todas las tareas canceladas</b>\n\n"
-        "Envía una nueva nota de voz para crear nuevas tareas.",
+        "Envía una nueva nota de voz o escribe texto para crear nuevas tareas.",
         parse_mode='HTML'
     )
 
