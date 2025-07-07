@@ -669,17 +669,16 @@ async def edit_task(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id:
 async def handle_text_edit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Maneja la edición de texto para tareas y creación de tareas via texto"""
     text = update.message.text
-    
-    # Si estamos en modo edición
-    if 'editing_task' in context.user_data:
+    if context.user_data.get('editing_task'):
         await handle_task_editing(update, context, text)
     else:
-        # Crear tareas via texto
         await handle_text_task_creation(update, context, text)
 
 async def handle_task_editing(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_text: str) -> None:
-    """Maneja la edición específica de una tarea"""
-    editing_info = context.user_data['editing_task']
+    editing_info = context.user_data.get('editing_task')
+    if not editing_info:
+        await update.message.reply_text("❌ No hay tarea en edición. Escribe una nueva tarea o usa los botones.")
+        return
     task_index = editing_info['index']
     original_task = editing_info['original_task']
     
@@ -756,44 +755,6 @@ async def handle_text_task_creation(update: Update, context: ContextTypes.DEFAUL
             "• 'Llamar al médico el lunes por la mañana'",
             parse_mode='HTML'
         )
-    
-    editing_info = context.user_data['editing_task']
-    task_index = editing_info['index']
-    original_task = editing_info['original_task']
-    
-    # Procesar el texto de edición con Gemini
-    edit_text = update.message.text
-    gemini_result = await process_text_with_gemini(edit_text)
-    
-    if gemini_result.get("tasks"):
-        # Usar la primera tarea del resultado como edición
-        edited_task = gemini_result["tasks"][0]
-        
-        # Actualizar la tarea en el contexto
-        tasks_data = context.user_data.get('pending_tasks', [])
-        if task_index < len(tasks_data):
-            tasks_data[task_index] = edited_task
-            
-            # Mostrar confirmación de edición
-            response_text = f"✅ <b>Tarea editada exitosamente!</b>\n\n"
-            response_text += f"📋 <b>Nuevo título:</b> {edited_task.get('title', 'Sin título')}\n"
-            response_text += f"📄 <b>Nueva descripción:</b> {edited_task.get('description', 'Sin descripción')}\n"
-            response_text += f"⚡ <b>Nueva prioridad:</b> {edited_task.get('priority', 'Sin prioridad')}\n"
-            response_text += f"📅 <b>Nueva fecha:</b> {edited_task.get('due_date', 'Sin fecha')}\n"
-            response_text += f"🏷️ <b>Nueva categoría:</b> {edited_task.get('category', 'Sin categoría')}\n\n"
-            response_text += "🔘 <b>Usa los botones para confirmar:</b>"
-            
-            # Crear botones actualizados
-            keyboard = create_task_confirmation_keyboard(tasks_data, update.effective_user.id)
-            
-            await update.message.reply_text(response_text, parse_mode='HTML', reply_markup=keyboard)
-        else:
-            await update.message.reply_text("❌ Error: Tarea no encontrada para editar.")
-    else:
-        await update.message.reply_text("❌ No se pudo procesar la edición. Intenta ser más específico.")
-    
-    # Limpiar modo edición
-    context.user_data.pop('editing_task', None)
 
 async def cancel_all_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int) -> None:
     """Cancela todas las tareas pendientes"""
@@ -886,6 +847,17 @@ async def handle_audio_message(update: Update, context: ContextTypes.DEFAULT_TYP
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Maneja errores del bot"""
     logger.error(f"Excepción mientras se manejaba una actualización: {context.error}")
+    error_str = str(context.error)
+    if 'Query is too old' in error_str or 'query id is invalid' in error_str:
+        if hasattr(update, 'message') and update.message:
+            await update.message.reply_text("⚠️ La acción expiró. Por favor, vuelve a intentarlo desde el menú principal.")
+        return
+    if 'Message is not modified' in error_str:
+        # No hacer nada, es un error inofensivo
+        return
+    # Otros errores
+    if hasattr(update, 'message') and update.message:
+        await update.message.reply_text("❌ Ocurrió un error inesperado. Por favor, intenta de nuevo o contacta soporte.")
 
 def main() -> None:
     """Función principal del bot"""
