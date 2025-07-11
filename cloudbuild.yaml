@@ -1,0 +1,42 @@
+steps:
+  # Build de la imagen Docker
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/todista-bot', '.']
+  
+  # Push de la imagen al Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/todista-bot']
+  
+  # Desplegar en Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'todista-bot'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/todista-bot'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '512Mi'
+      - '--cpu'
+      - '1'
+      - '--max-instances'
+      - '1'
+      - '--timeout'
+      - '300'
+      - '--set-env-vars'
+      - 'TELEGRAM_TOKEN=${_TELEGRAM_TOKEN},OPENAI_API_KEY=${_OPENAI_API_KEY},GEMINI_API_KEY=${_GEMINI_API_KEY},TODOIST_API_TOKEN=${_TODOIST_API_TOKEN}'
+
+images:
+  - 'gcr.io/$PROJECT_ID/todista-bot'
+
+substitutions:
+  _TELEGRAM_TOKEN: 'your-telegram-token'
+  _OPENAI_API_KEY: 'your-openai-key'
+  _GEMINI_API_KEY: 'your-gemini-key'
+  _TODOIST_API_TOKEN: 'your-todoist-token' 

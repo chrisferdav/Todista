@@ -1,0 +1,49 @@
+# Archivos de configuración local
+config.env
+.env
+*.env
+
+# Archivos de desarrollo
+.git
+.gitignore
+README.md
+*.md
+
+# Archivos de Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
+
+# Archivos de IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Archivos temporales
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Archivos de Render (ya no los necesitamos)
+render.yaml
+railway.json 

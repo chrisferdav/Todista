@@ -1,0 +1,59 @@
+name: Deploy to Google Cloud Run
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE_NAME: todista-bot
+  REGION: us-central1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Google Cloud CLI
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+    - name: Configure Docker for GCR
+      run: gcloud auth configure-docker
+
+    - name: Build and push Docker image
+      run: |
+        gcloud builds submit --tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/todista-bot --quiet
+
+    - name: Deploy to Cloud Run
+      run: |
+        gcloud run deploy todista-bot \
+          --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/todista-bot \
+          --platform managed \
+          --region us-central1 \
+          --allow-unauthenticated \
+          --memory 512Mi \
+          --cpu 1 \
+          --max-instances 1 \
+          --timeout 300 \
+          --set-env-vars="TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},TODOIST_API_TOKEN=${{ secrets.TODOIST_API_TOKEN }}" \
+          --quiet
+
+    - name: Get service URL
+      id: service-url
+      run: |
+        echo "url=$(gcloud run services describe todista-bot --region=us-central1 --format='value(status.url)')" >> $GITHUB_OUTPUT
+
+    - name: Show deployment info
+      run: |
+        echo "✅ Deployment completed successfully!"
+        echo "Service URL: ${{ steps.service-url.outputs.url }}"
+        echo "Region: us-central1"
+        echo "Service: todista-bot" 
